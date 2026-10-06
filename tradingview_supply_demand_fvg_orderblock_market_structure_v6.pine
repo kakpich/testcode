@@ -1,0 +1,110 @@
+//@version=6
+indicator("Supply Demand + FVG + Order Block + Market Structure", overlay=true, max_labels_count=500, max_boxes_count=200)
+
+swingLen = input.int(5, "Swing Length", minval=2)
+zoneExtend = input.int(30, "Zone Extension (bars)", minval=1)
+showSupplyDemand = input.bool(true, "Show Supply / Demand Zones")
+showFVG = input.bool(true, "Show Fair Value Gaps")
+showOrderBlocks = input.bool(true, "Show Order Blocks")
+showMarketStructure = input.bool(true, "Show Market Structure")
+
+bullishColor = color.new(color.lime, 0)
+bearishColor = color.new(color.red, 0)
+translucentBull = color.new(color.lime, 80)
+translucentBear = color.new(color.red, 80)
+
+// -----------------------------
+// Utility: draw box
+// -----------------------------
+drawZone(leftBar, topPrice, rightBar, bottomPrice, borderC, fillC, labelText, labelY) =>
+    b = box.new(left=leftBar, top=topPrice, right=rightBar, bottom=bottomPrice, border_color=borderC, bgcolor=fillC, extend=extend.right, xloc=xloc.bar_index)
+    if labelText != ""
+        label.new(x=labelY, y=topPrice, text=labelText, color=borderC, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+    b
+
+// -----------------------------
+// 1) Supply / Demand Zones
+// -----------------------------
+var float lastSupplyPivot = na
+var float lastDemandPivot = na
+
+swingHigh = ta.pivothigh(high, swingLen, swingLen)
+swingLow = ta.pivotlow(low, swingLen, swingLen)
+
+if showSupplyDemand and not na(swingHigh)
+    highRange = math.abs(high - low)
+    supplyTop = swingHigh
+    supplyBottom = swingHigh - highRange * 0.6
+    if na(lastSupplyPivot) or swingHigh > lastSupplyPivot
+        drawZone(leftBar=bar_index - swingLen, topPrice=supplyTop, rightBar=bar_index + zoneExtend, bottomPrice=supplyBottom, borderC=color.new(color.red, 0), fillC=color.new(color.red, 80), labelText="Supply", labelY=bar_index - swingLen)
+        lastSupplyPivot := swingHigh
+
+if showSupplyDemand and not na(swingLow)
+    lowRange = math.abs(high - low)
+    demandTop = swingLow + lowRange * 0.6
+    demandBottom = swingLow
+    if na(lastDemandPivot) or swingLow < lastDemandPivot
+        drawZone(leftBar=bar_index - swingLen, topPrice=demandTop, rightBar=bar_index + zoneExtend, bottomPrice=demandBottom, borderC=color.new(color.green, 0), fillC=color.new(color.green, 80), labelText="Demand", labelY=bar_index - swingLen)
+        lastDemandPivot := swingLow
+
+// -----------------------------
+// 2) Fair Value Gap (FVG)
+// -----------------------------
+if showFVG
+    bullishFVG = high[2] < low
+    bearishFVG = low[2] > high
+
+    if bullishFVG
+        box.new(left=bar_index - 2, top=low, right=bar_index + zoneExtend, bottom=high[2], border_color=color.new(color.lime, 0), bgcolor=color.new(color.lime, 70), xloc=xloc.bar_index, extend=extend.right)
+        label.new(x=bar_index, y=low, text="Bull FVG", color=color.new(color.lime, 0), textcolor=color.white, style=label.style_label_up, size=size.tiny)
+
+    if bearishFVG
+        box.new(left=bar_index - 2, top=high, right=bar_index + zoneExtend, bottom=low[2], border_color=color.new(color.red, 0), bgcolor=color.new(color.red, 70), xloc=xloc.bar_index, extend=extend.right)
+        label.new(x=bar_index, y=high, text="Bear FVG", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+
+// -----------------------------
+// 3) Order Blocks
+// -----------------------------
+if showOrderBlocks
+    bullishOB = close[1] < open[1] and close > open and close > high[1]
+    bearishOB = close[1] > open[1] and close < open and close < low[1]
+
+    if bullishOB
+        box.new(left=bar_index - 1, top=high[1], right=bar_index + zoneExtend, bottom=low[1], border_color=color.new(color.green, 0), bgcolor=color.new(color.green, 60), xloc=xloc.bar_index, extend=extend.right)
+        label.new(x=bar_index, y=high[1], text="Bull OB", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_up, size=size.tiny)
+
+    if bearishOB
+        box.new(left=bar_index - 1, top=high[1], right=bar_index + zoneExtend, bottom=low[1], border_color=color.new(color.red, 0), bgcolor=color.new(color.red, 60), xloc=xloc.bar_index, extend=extend.right)
+        label.new(x=bar_index, y=low[1], text="Bear OB", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+
+// -----------------------------
+// 4) Market Structure
+// -----------------------------
+var float lastHH = na
+var float lastLH = na
+var float lastHL = na
+var float lastLL = na
+
+if showMarketStructure and not na(swingHigh)
+    if na(lastHH) or swingHigh > lastHH
+        label.new(x=bar_index, y=swingHigh, text="HH", color=color.new(color.lime, 0), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+        lastHH := swingHigh
+    else if swingHigh < lastHH
+        label.new(x=bar_index, y=swingHigh, text="LH", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+        lastLH := swingHigh
+        lastHH := swingHigh
+
+if showMarketStructure and not na(swingLow)
+    if na(lastLL) or swingLow < lastLL
+        label.new(x=bar_index, y=swingLow, text="LL", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_up, size=size.tiny)
+        lastLL := swingLow
+    else if swingLow > lastLL
+        label.new(x=bar_index, y=swingLow, text="HL", color=color.new(color.lime, 0), textcolor=color.white, style=label.style_label_up, size=size.tiny)
+        lastHL := swingLow
+        lastLL := swingLow
+
+// -----------------------------
+// Optional Background Trend Bias
+// -----------------------------
+trendBias = close > ta.ema(close, 21) ? color.new(color.lime, 85) : color.new(color.red, 85)
+bgcolor(trendBias)
